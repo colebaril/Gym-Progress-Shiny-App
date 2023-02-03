@@ -1,4 +1,4 @@
-# Gym-Progress-App
+# Gym Progress Shiny App
 
 This is code for a Shiny app to track my gym progress. 
 
