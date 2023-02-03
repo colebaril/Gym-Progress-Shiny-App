@@ -1,6 +1,6 @@
 # Gym Progress Shiny App
 
-This is code for a Shiny app to track my gym progress. The app can be accessed from [here](https://colewb.shinyapps.io/Cole_Gym_Progress/). 
+This is code for a Shiny app to track my gym progress. The app can be accessed [here](https://colewb.shinyapps.io/Cole_Gym_Progress/). 
 
 This app displays my exercise weight and frequency progression over time. Also shown is a exercise calendar showing what times of the day and on what days of the week I exercise.
 
