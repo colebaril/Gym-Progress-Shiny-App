@@ -8,9 +8,10 @@ library(shiny)
  library(tidyr)
  library(lubridate)
 
- df <- read_csv(here("strong.csv")) %>% # This must be the directory of the server. 
+ df <- read_csv(here("strong.csv")) %>% # This must be the directory of the server. Raw/ is my local
    clean_names() %>% 
    select(-8:-last_col()) %>% 
+   mutate(datetime = ymd_hms(date)) %>% 
    mutate(hour = lubridate::hour(date)) %>% 
    mutate(weekday = lubridate::wday(date, label = TRUE)) %>% 
    mutate(month = month(date, label = TRUE, abbr = FALSE)) %>% 
@@ -18,8 +19,8 @@ library(shiny)
    mutate(set_order = as.factor(set_order))
  
  df2 <- df %>% 
-   distinct(date, .keep_all = TRUE) %>% 
-   group_by(hour, weekday, month) %>% 
+   distinct(datetime, .keep_all = TRUE) %>% 
+   group_by(hour, weekday) %>% 
    summarise(totalexercises = n())
  
  linebreaks <- function(n){HTML(strrep(br(), n))}
@@ -31,12 +32,9 @@ library(shiny)
        selectInput("exercise_name", "Exercise:", 
                    unique(as.character(df$exercise_name)), 
                    selected = "Hack Squat"),
-       selectInput("month", "Month:",
-                   c("All", unique(as.character(df2$month))),
-                   selected = "All"),
        p("This app displays my exercise weight and frequency progression over time. Also shown is a exercise calendar showing what
       times of the day and on what days of the week I exercise."), 
-       linebreaks(5),
+       linebreaks(2),
        p("This app was built using R and the tidyverse to compute stats, ggplot2 for data vizualizations and 
       hosted with Shiny. Data was logged and stored using the Strong App. All exercise was done at Snap Fitness Kildonan."),
        width = 3),
@@ -113,7 +111,6 @@ library(shiny)
    })
    
    output$heatMap <- renderPlot({
-     if(input$month == "All") {
        ggplot(df2, aes(weekday, hour, fill = totalexercises)) + 
          geom_tile(color = "white", size = 0.1) +
          scale_fill_gradient(high = "#D88300", low = "#F9D398", breaks = seq(0,10, by = 1)) +
@@ -124,19 +121,7 @@ library(shiny)
          theme_bw() +
          theme(panel.grid.major.x = element_blank(),
                panel.grid.minor.x = element_blank())
-     } else {
-       ggplot(df2[df2$month == input$month,],
-              aes(weekday, hour, fill = totalexercises)) + 
-         geom_tile(color = "white", size = 0.1) +
-         scale_fill_gradient(high = "#D88300", low = "#F9D398", breaks = seq(0,10, by = 1)) +
-         scale_y_continuous(trans = "reverse") + 
-         labs(x= "Weekday", y= "Hour of the day (24-Hour, CST)",
-              fill = "Exercise \nSessions",
-              title = "Weekly Exercise Heatmap") +
-         theme_bw() +
-         theme(panel.grid.major.x = element_blank(),
-               panel.grid.minor.x = element_blank())
-     }
+    
    })
  }
  
