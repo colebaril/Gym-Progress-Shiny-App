@@ -2,13 +2,13 @@ library(shiny)
  library(tidyverse)
  library(here)
  library(janitor)
- library(magrittr)
  library(dplyr)
  library(ggplot2)
  library(tidyr)
  library(lubridate)
+ library(magrittr)
 
- df <- read_csv(here("strong.csv")) %>% # This must be the directory of the server. Raw/ is my local
+ df <- read_csv(here("Raw/strong.csv")) %>% # This must be the directory of the server. Raw/ is my local
    clean_names() %>% 
    select(-8:-last_col()) %>% 
    mutate(datetime = ymd_hms(date)) %>% 
@@ -23,36 +23,72 @@ library(shiny)
    group_by(hour, weekday) %>% 
    summarise(totalexercises = n())
  
+ df3 <- df %>% 
+   mutate(weightxreps = weight * reps) %>% 
+   mutate(workout_name = replace(workout_name, exercise_name == "Plank", "Core"),
+          workout_name = replace(workout_name, exercise_name == "Russian Twist", "Core"),
+          workout_name = replace(workout_name, exercise_name == "Decline Crunch", "Core"),
+          workout_name = replace(workout_name, exercise_name == "Ab Wheel", "Core"),
+          workout_name = replace(workout_name, exercise_name == "Hanging Leg Raise", "Core")) %>% 
+   filter(workout_name != "Core") %>% 
+   group_by(datetime, workout_name) %>% 
+   summarise(total_weight = sum(weightxreps))
+ 
+
+   ggplot(df3, aes(x = datetime, y = total_weight)) +
+   geom_point(aes(group = workout_name, colour = workout_name)) +
+   geom_smooth(aes(group = workout_name, colour = workout_name), se = FALSE) +
+   theme_bw() +
+   labs(x = "Date",
+        y = "Weight (lbs)",
+        title = "Total Weight Lifted in Workout Sessions",
+        colour = "Workout") +
+   theme(plot.caption = element_text(hjust = 0, face = "bold"))
+ 
  linebreaks <- function(n){HTML(strrep(br(), n))}
  
- ui <- fluidPage(
-   titlePanel("Cole's Gym Progress"),
-   sidebarLayout(
-     sidebarPanel(
-       selectInput("exercise_name", "Exercise:", 
-                   unique(as.character(df$exercise_name)), 
-                   selected = "Hack Squat"),
-       p("This app displays my exercise weight and frequency progression over time. Also shown is a exercise calendar showing what
-      times of the day and on what days of the week I exercise."), 
-       linebreaks(2),
-       p("This app was built using R and the tidyverse to compute stats, ggplot2 for data vizualizations and 
-      hosted with Shiny. Data was logged and stored using the Strong App. All exercise was done at Snap Fitness Kildonan."),
-       width = 3),
-     
-     mainPanel(
-       tabsetPanel(
-       tabPanel(
-         "Exercises", 
-         plotOutput("barPlot", width = "100%"),
-         plotOutput("barPlot2", width = "100%", height = 200)),
-       tabPanel("Exercise Heatmap",
-       plotOutput("heatMap", width = 500, height = 600)
-       )
-       )
-     )
-   )
- )
+dropdowncss <- "
+.selectize-dropdown-content {
+  max-height: 500px;
+  overflow-y: auto;
+  background: ghostwhite;
+}
+"
  
+ ui <- navbarPage("Cole's Gym Tracker",
+                  tabPanel("Weight",
+                          sidebarLayout(
+                            sidebarPanel(
+                              tags$style(dropdowncss),
+                              selectInput("exercise_name", "Exercise:", 
+                                          unique(as.character(df$exercise_name)), 
+                                          selected = "Hack Squat", width="350px")
+                            ),
+                            mainPanel(
+                              plotOutput("barPlot", width = "100%"),
+                              plotOutput("barPlot2", width = "100%", height = 200))
+                            )
+                          ),
+     tabPanel("Total Weight",
+              sidebarLayout(
+                sidebarPanel(
+                  checkboxGroupInput("workout_name", "Workout:", 
+                                     c("Legs" = "Legs",
+                                       "Push" = "Push",
+                                       "Pull" = "Pull"))
+                ),
+                mainPanel(
+                  plotOutput("total_weight", width = "100%"),
+              )
+              )
+     ),             
+ 
+     tabPanel("Weekly Heatmap",
+          plotOutput("heatMap", width = 500, height = 600)
+      )
+ ) # end
+   
+
  server <- function(input, output) {
    output$barPlot <- renderPlot({
      if (input$exercise_name == "All") {
@@ -108,6 +144,20 @@ library(shiny)
          theme(plot.caption = element_text(hjust = 0, face = "bold")) +
          scale_fill_viridis_d(name = "Set")
      }
+   })
+   
+   output$total_weight <- renderPlot({
+          ggplot(df3[df3$workout_name %in% input$workout_name, ],
+            aes(x = datetime, y = total_weight)) +
+                geom_point(aes(group = workout_name, colour = workout_name)) +
+                geom_smooth(aes(group = workout_name, colour = workout_name), se = FALSE) +
+                theme_bw() +
+                labs(x = "Date",
+                     y = "Weight (lbs)",
+                     title = "Total Weight Lifted in Workout Sessions",
+                     colour = "Workout") +
+                theme(plot.caption = element_text(hjust = 0, face = "bold"))
+     
    })
    
    output$heatMap <- renderPlot({
