@@ -1,4 +1,4 @@
-library(shiny)
+ library(shiny)
  library(tidyverse)
  library(here)
  library(janitor)
@@ -7,8 +7,9 @@ library(shiny)
  library(tidyr)
  library(lubridate)
  library(magrittr)
+ library(shinyWidgets)
 
- df <- read_csv(here("Raw/strong.csv")) %>% # This must be the directory of the server. Raw/ is my local
+ df <- read_csv(here("strong.csv")) %>% # This must be the directory of the server. Raw/ is my local
    clean_names() %>% 
    select(-8:-last_col()) %>% 
    mutate(datetime = ymd_hms(date)) %>% 
@@ -34,16 +35,27 @@ library(shiny)
    group_by(datetime, workout_name) %>% 
    summarise(total_weight = sum(weightxreps))
  
+ df4 <- df %>% 
+   select(-8:-last_col()) %>% 
+   rename("Exercise" = "exercise_name",
+          "Set" = "set_order",
+          "Weight (lbs)" = "weight",
+          "Reps" = "reps")
+ 
+ dfsummary <- df4 %>% 
+   select(1:3) %>% 
+   distinct() %>% 
+   rename("Workout" = "workout_name",
+          "Duration" = "duration")
+   
+ 
+ dates <- df %>% 
+   distinct(date) %>% 
+   pull() # Convert to vector for airdatepicker
+ 
+min_date <- min(df$date)
+max_date <- max(df$date)
 
-   ggplot(df3, aes(x = datetime, y = total_weight)) +
-   geom_point(aes(group = workout_name, colour = workout_name)) +
-   geom_smooth(aes(group = workout_name, colour = workout_name), se = FALSE) +
-   theme_bw() +
-   labs(x = "Date",
-        y = "Weight (lbs)",
-        title = "Total Weight Lifted in Workout Sessions",
-        colour = "Workout") +
-   theme(plot.caption = element_text(hjust = 0, face = "bold"))
  
  linebreaks <- function(n){HTML(strrep(br(), n))}
  
@@ -54,7 +66,12 @@ dropdowncss <- "
   background: ghostwhite;
 }
 "
- 
+ transparent <- "
+ .set1 form.well { 
+   background: transparent;
+   border: 0px;
+ }
+ "
  ui <- navbarPage("Cole's Gym Tracker",
                   tabPanel("Weight",
                           sidebarLayout(
@@ -85,7 +102,33 @@ dropdowncss <- "
  
      tabPanel("Weekly Heatmap",
           plotOutput("heatMap", width = 500, height = 600)
-      )
+      ),
+     tabPanel("Data",
+              sidebarLayout(
+                sidebarPanel(
+                  airDatepickerInput("date", label = h3("Select Date"), highlightedDates = dates, 
+                                     minDate = min_date, maxDate = max_date, multiple = TRUE),
+                  p("Select one or multiple dates to view workout details."),
+                  p(div(HTML("<em>Dates with data available are marked on the calendar with a dot.</em>"))),
+                  br(),
+                  h4("Workout Summary"),
+                  p(div(HTML("<em>For selected date(s).</em>"))),
+                  tableOutput("datatablesummary")
+
+                ),
+                mainPanel(
+                  h1("Workout Details"),
+                  tableOutput("datatable")
+                )
+              ),
+            
+             
+              ),
+     tabPanel("About",
+              h1("Data"),
+              p("Data was logged and retrieved using the Strong App and workouts were done at Snap Fitness Kildonan."),
+              p("R and the tidyverse was used to manipulate data and the app is made and hosted with Shiny.")
+              )
  ) # end
    
 
@@ -173,6 +216,21 @@ dropdowncss <- "
                panel.grid.minor.x = element_blank())
     
    })
+   
+   output$datatable <- renderTable(
+     table <- df4 %>% 
+       filter(date %in% input$date) %>% 
+       select(-duration, -workout_name) %>% 
+       select(-date),
+     digits = 0
+   )
+   
+   output$datatablesummary <- renderTable(
+     tablesummary <- dfsummary %>% 
+       filter(date %in% input$date) %>% 
+       select(-date),
+     digits = 0
+   )
  }
  
  # Run the application 
