@@ -8,8 +8,9 @@
  library(lubridate)
  library(magrittr)
  library(shinyWidgets)
+ library(patchwork)
 
- df <- read_csv(here("strong.csv")) %>% # This must be the directory of the server. Raw/ is my local
+ df <- read_csv(here("Raw/strong.csv")) %>% # This must be the directory of the server. Raw/ is my local
    clean_names() %>% 
    select(-8:-last_col()) %>% 
    mutate(datetime = ymd_hms(date)) %>% 
@@ -23,6 +24,12 @@
    distinct(datetime, .keep_all = TRUE) %>% 
    group_by(hour, weekday) %>% 
    summarise(totalexercises = n())
+ 
+ df2.5 <- df %>% 
+   distinct(datetime, .keep_all = TRUE) %>% 
+   group_by(weekday) %>% 
+   summarise(totalexercises = n()) %>% 
+   mutate(y = as_factor(1))
  
  df3 <- df %>% 
    mutate(weightxreps = weight * reps) %>% 
@@ -55,6 +62,7 @@
  
 min_date <- min(df$date)
 max_date <- max(df$date)
+
 
  
  linebreaks <- function(n){HTML(strrep(br(), n))}
@@ -101,7 +109,17 @@ dropdowncss <- "
      ),             
  
      tabPanel("Weekly Heatmap",
+              sidebarLayout(
+                sidebarPanel(
+                  selectInput("cal_choices", "Select Time Distribution", 
+                                     c("Hourly",
+                                       "Weekly"),
+                              selected = "Hourly")
+                ),
+                mainPanel(
           plotOutput("heatMap", width = 500, height = 600)
+                )
+      )
       ),
      tabPanel("Data",
               sidebarLayout(
@@ -204,17 +222,35 @@ dropdowncss <- "
    })
    
    output$heatMap <- renderPlot({
+     if (input$cal_choices == "Hourly") {
        ggplot(df2, aes(weekday, hour, fill = totalexercises)) + 
          geom_tile(color = "white", size = 0.1) +
-         scale_fill_gradient(high = "#D88300", low = "#F9D398", breaks = seq(0,10, by = 1)) +
-         scale_y_continuous(trans = "reverse") + 
+         scale_fill_distiller(palette = "YlOrBr", trans = "reverse") +
+         scale_y_continuous(breaks = seq(0,24, by = 1),
+                            trans = "reverse",
+                            expand = c(0, 0)) + 
          labs(x= "Weekday", y= "Hour of the day (24-Hour, CST)",
               fill = "Exercise \nSessions",
               title = "Weekly Exercise Heatmap") +
          theme_bw() +
          theme(panel.grid.major.x = element_blank(),
-               panel.grid.minor.x = element_blank())
-    
+               panel.grid.minor.x = element_blank(),
+               panel.grid.minor.y = element_blank())
+     } else if (input$cal_choices == "Weekly") {
+       ggplot(df2.5, aes(x = weekday, y = y, fill = totalexercises)) + 
+         geom_tile(color = "white", size = 0.1) +
+         scale_fill_distiller(palette = "YlOrBr", trans = "reverse") + 
+         scale_y_discrete(expand = c(0, 0)) +
+         labs(x = "Weekday",
+              y = "",
+              fill = "Exercise \nSessions",
+              title = "Weekly Exercise Heatmap") +
+         theme_bw() +
+         theme(panel.grid.major.x = element_blank(),
+               panel.grid.minor.x = element_blank(),
+               axis.text.y = element_blank(),
+               axis.ticks.y = element_blank())
+     }
    })
    
    output$datatable <- renderTable(
