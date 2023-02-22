@@ -1,3 +1,4 @@
+
  library(shiny)
  library(tidyverse)
  library(here)
@@ -8,9 +9,9 @@
  library(lubridate)
  library(magrittr)
  library(shinyWidgets)
- library(patchwork)
 
- df <- read_csv(here("Raw/strong.csv")) %>% # This must be the directory of the server. Raw/ is my local
+
+ df <- read_csv(here("strong.csv")) %>% # This must be the directory of the server. Raw/ is my local
    clean_names() %>% 
    select(-8:-last_col()) %>% 
    mutate(datetime = ymd_hms(date)) %>% 
@@ -19,6 +20,11 @@
    mutate(month = month(date, label = TRUE, abbr = FALSE)) %>% 
    mutate(date = as.Date(date)) %>% 
    mutate(set_order = as.factor(set_order))
+ 
+ df0.5 <- df %>% 
+   select(-set_order) %>% 
+   group_by(datetime, exercise_name) %>% 
+   slice_max(weight, with_ties = FALSE)
  
  df2 <- df %>% 
    distinct(datetime, .keep_all = TRUE) %>% 
@@ -87,11 +93,16 @@ dropdowncss <- "
                               tags$style(dropdowncss),
                               selectInput("exercise_name", "Exercise:", 
                                           unique(as.character(df$exercise_name)), 
-                                          selected = "Hack Squat", width="350px")
+                                          selected = "Hack Squat", width="350px"),
+                              h4("Notes"),
+                              p("Cases where prolonged plateaus are obserbed (e.g., Hip Adductor and Hip Abductor) are due to maxing out
+                    the weight of the machine. Additionally, there are some cases where exercise weight is measured per limb rather
+                    than totally (e.g., lying leg curl is per leg).")
                             ),
                             mainPanel(
                               plotOutput("barPlot", width = "100%"),
-                              plotOutput("barPlot2", width = "100%", height = 200))
+                              plotOutput("barPlot2", width = "100%", height = 200),
+                              plotOutput("maxweight", width = "100%"))
                             )
                           ),
      tabPanel("Total Weight",
@@ -100,7 +111,8 @@ dropdowncss <- "
                   checkboxGroupInput("workout_name", "Workout:", 
                                      c("Legs" = "Legs",
                                        "Push" = "Push",
-                                       "Pull" = "Pull"))
+                                       "Pull" = "Pull")),
+                  
                 ),
                 mainPanel(
                   plotOutput("total_weight", width = "100%"),
@@ -138,7 +150,7 @@ dropdowncss <- "
                   h1("Workout Details"),
                   tableOutput("datatable")
                 )
-              ),
+              )
             
              
               ),
@@ -152,18 +164,6 @@ dropdowncss <- "
 
  server <- function(input, output) {
    output$barPlot <- renderPlot({
-     if (input$exercise_name == "All") {
-       ggplot(df, aes(x = date, y = weight, fill = fct_rev(set_order))) +
-         geom_bar(stat = "identity") +
-         scale_y_continuous() +
-         theme_bw() +
-         labs(x = "Date",
-              y = "Weight (lbs)",
-              title = "Weight Progression",
-              colour = "Rep Number") +
-         theme(plot.caption = element_text(hjust = 0)) +
-         scale_fill_viridis_d(name = "Rep Number")
-     } else {
        ggplot(df[df$exercise_name == input$exercise_name,],
               aes(x = date, y = weight, fill = set_order)) +
          geom_bar(stat = "identity", position = "dodge", width = 2) +
@@ -176,8 +176,20 @@ dropdowncss <- "
               colour = "Rep Number") +
          theme(plot.caption = element_text(hjust = 0, face = "bold")) +
          scale_fill_viridis_d(name = "Set")
-     }
+     
    })
+   
+   output$maxweight <- renderPlot({
+     ggplot(df0.5[df0.5$exercise_name == input$exercise_name,],
+            aes(x = datetime, y = weight)) +
+       geom_point() +
+       geom_smooth(se = FALSE) +
+       theme_bw() +
+       labs(x = "Date",
+            y = "Weight (lbs)",
+            title = "Maximum Weight Lifted") +
+       theme(plot.title = element_text(face = "bold"))
+   }) 
    
    output$barPlot2 <- renderPlot({
      if (input$exercise_name == "All") {
@@ -189,7 +201,7 @@ dropdowncss <- "
               y = "Weight (lbs)",
               title = "Weight Progression",
               colour = "Rep Number") +
-         theme(plot.caption = element_text(hjust = 0)) +
+         theme(plot.title = element_text(face = "bold")) +
          scale_fill_viridis_d(name = "Rep Number")
      } else {
        ggplot(df[df$exercise_name == input$exercise_name,],
@@ -202,7 +214,7 @@ dropdowncss <- "
               y = "Reps",
               title = "Number of Reps",
               colour = "Rep Number") +
-         theme(plot.caption = element_text(hjust = 0, face = "bold")) +
+         theme(plot.title = element_text(face = "bold")) +
          scale_fill_viridis_d(name = "Set")
      }
    })
@@ -217,8 +229,7 @@ dropdowncss <- "
                      y = "Weight (lbs)",
                      title = "Total Weight Lifted in Workout Sessions",
                      colour = "Workout") +
-                theme(plot.caption = element_text(hjust = 0, face = "bold"))
-     
+       theme(plot.title = element_text(face = "bold"))
    })
    
    output$heatMap <- renderPlot({
